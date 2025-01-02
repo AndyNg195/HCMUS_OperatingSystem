@@ -70,14 +70,63 @@ sys_sleep(void)
 }
 
 
-#ifdef LAB_PGTBL
+
 int
-sys_pgaccess(void)
-{
-  // lab pgtbl: your code here.
-  return 0;
+sys_pgaccess(void) {
+  uint64 start;
+  int npages;
+  uint64 abitsaddr;
+  uint64 va;
+  uint64 mask;
+  uint64 abits;
+
+  struct proc *p = myproc();
+
+  // Kiểm tra và lấy tham số từ syscall
+  // if (argaddr(0, &start) < 0 || argint(1, &npages) < 0 || argaddr(2, &abitsaddr) < 0) {
+  //   return -1;
+  // }
+  if (argaddr(0, &start), start == 0)
+    return -1;
+  if (argint(1, &npages), npages == 0)
+    return -1;
+  if(argaddr(2, &abitsaddr),abitsaddr == 0)
+    return -1;
+  // Kiểm tra số lượng trang hợp lệ
+  if (npages <= 0 || npages > 64) {
+    return -1;
+  }
+
+  mask = 1;
+  abits = 0;
+
+  // Duyệt qua từng trang
+  for (va = start; va < start + PGSIZE * npages; va += PGSIZE) {
+    pte_t *pte = walk(p->pagetable, va, 0);
+
+    // Kiểm tra PTE hợp lệ
+    if (pte == 0 || (*pte & PTE_V) == 0) {
+      continue; // Trang không hợp lệ, bỏ qua
+    }
+
+    // Kiểm tra nếu bit A được đặt
+    if (*pte & PTE_A) {
+      abits |= mask; // Đánh dấu bit tương ứng
+      *pte &= ~PTE_A; // Xóa bit A
+    }
+
+    mask <<= 1; // Dịch bitmask
+  }
+
+  // Sao chép kết quả vào không gian người dùng
+  if (copyout(p->pagetable, abitsaddr, (char *)&abits, sizeof(uint64)) < 0) {
+    return -1;
+  }
+
+  return 0; // Thành công
 }
-#endif
+
+
 
 uint64
 sys_kill(void)
